@@ -19,6 +19,8 @@ function dep() {
         -S$(cd "$(dirname "$SRC_DIR")"; pwd)/$(basename "$SRC_DIR") \
         -DCMAKE_BUILD_TYPE=Release
 
+  export CMAKE_PREFIX_PATH=$HOME/install/$PKG_NAME:$CMAKE_PREFIX_PATH
+
   echo "add dep $SRC_DIR => $PKG_NAME"
   cd ~/build/$PKG_NAME
 }
