@@ -1,0 +1,93 @@
+function own() {
+  [ -d ${1} ] && [ $(stat --format '%U' ${1}) = root ] &&
+  sudo chown -R $USERNAME:$USERNAME ${1}
+}
+
+function conn() {
+  export ROS_MASTER_URI=http://${1}:11311
+}
+
+function dep() {
+  PKG_NAME=${1}
+  SRC_DIR=${2}
+
+  mkdir ~/build/$PKG_NAME
+  mkdir ~/install/$PKG_NAME
+
+  cmake -B~/build/$PKG_NAME \
+        -DCMAKE_INSTALL_PREFIX:PATH=~/install/$PKG_NAME \
+        -S$(cd "$(dirname "$SRC_DIR")"; pwd)/$(basename "$SRC_DIR") \
+        -DCMAKE_BUILD_TYPE=Release
+
+  export CMAKE_PREFIX_PATH=$HOME/install/$PKG_NAME:$CMAKE_PREFIX_PATH
+
+  echo "add dep $SRC_DIR => $PKG_NAME"
+  cd ~/build/$PKG_NAME
+}
+
+function build() {
+  cwd=$(pwd)
+  cd ~/ros_ws
+  if [ -z ${1} ]; then
+    catkin_make -DCATKIN_WHITELIST_PACKAGES=
+  else
+    catkin_make -DCATKIN_WHITELIST_PACKAGES="$@"
+  fi
+  cd $cwd
+}
+
+own ~/etc
+own ~/mnt
+own ~/.local
+
+if [ ! -d ~/ros_ws ]; then
+
+  mkdir -p ~/ros_ws/src
+
+  [ -d ~/mnt/_etc ] && ln -sf ~/mnt/_etc/* ~/etc
+
+  [ ! -d ~/mnt/_build ] && mkdir ~/mnt/_build
+  [ ! -d ~/mnt/_install ] && mkdir ~/mnt/_install
+  [ ! -h ~/build ] && ln -s ~/mnt/_build ~/build
+  [ ! -h ~/install ] && ln -s ~/mnt/_install ~/install
+
+  [ ! -d ~/build/catkin ] && mkdir ~/build/catkin
+  [ ! -d ~/install/catkin ] && mkdir ~/install/catkin
+  [ ! -h ~/ros_ws/build ] && ln -s ~/build/catkin ~/ros_ws/build
+  [ ! -h ~/ros_ws/devel ] && ln -s ~/install/catkin ~/ros_ws/devel
+
+  [ -d ~/mnt/3rd_party ] &&  ln -s ~/mnt/3rd_party ~/3rd_party
+
+  for name in $(ls ~/mnt); do
+    prj=~/mnt/${name}
+    if [ -d ${prj} ] && \
+      [ ! ${name} = _etc ] && \
+      [ ! ${name} = _build ] && \
+      [ ! ${name} = _install ] && \
+      [ ! ${name} = 3rd_party ]; then
+      ln -s ${prj} ~/ros_ws/src/${name}
+    fi
+  done
+
+  if [ -d ~/3rd_party ]; then
+    for name in $(ls ~/3rd_party); do
+      if [ ! -d ~/build/${name} ]; then
+        dep ${name} ~/3rd_party/${name}
+      fi
+    done
+  fi
+
+  cd ~/ros_ws
+fi
+
+source ~/etc/init
+
+echo -e "Usage: "
+echo -e "    own dir                  Chown mounted directory from Root to User"
+echo -e "    conn ip                  Connect another devdocker by ros-multi-machine"
+echo -e "    dep pkg_name src_dir     Build and install thirdparty dependency"
+echo -e "    build [pkg_name]         Build colcon package, build all if not given"
+echo -e ""
+echo -e "Dependencies in 3rd_party will be sourced at start, build deps by"
+echo -e "    cmake --build ~/build/pkg_name -- -j"
+echo -e "    cmake --install ~/build/pkg_name"
