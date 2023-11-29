@@ -1,5 +1,7 @@
 #!/bin/bash
 
-distro="melodic_$(uname -m)"
-docker build -t etherswangel/ros:$distro .
+docker buildx build \
+--push \
+--platform linux/arm64/v8,linux/amd64 \
+--tag etherswangel/ros:melodic .
 
