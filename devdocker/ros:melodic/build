@@ -1,1 +1,5 @@
-docker build -t etherswangel/ros:melodic .
+#!/bin/bash
+
+distro="melodic_$(uname -m)"
+docker build -t etherswangel/ros:$distro .
+
