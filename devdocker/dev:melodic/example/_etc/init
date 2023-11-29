@@ -1,0 +1,18 @@
+function ws() {
+  source ~/ros_ws/devel/setup.bash
+
+  cd ~/ros_ws/src
+  ls
+}
+
+function ef() {
+  cd ${1}
+  ls
+}
+
+alias v='nvim'
+alias vim='nvim'
+
+[ -d ~/etc/sessions ] && ln -sf ~/etc/sessions ~/.local/share/nvim/sessions
+
+ws
