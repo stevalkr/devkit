@@ -1,17 +1,49 @@
 # devkit
 
-devkit is a set of tools for ros/ros2 development, used by myself.
+devkit is a set of tools for development.
 
-## Prerequisites
+## ShortKut
 
-- ~~nix~~
+### Prerequisites
+
+- fmt
+- lua
+- meson
+- doctest
+
+### Usage
+
+ShortKut is a customizable alias, currently using Lua as scripting language.
+
+```bash
+sk build
+sk flake
+...
+```
+
+Write your own alias following the template:
+
+```lua
+local M = {}
+
+-- ~ sk alias
+-- hello
+M.alias = function()
+    return 'echo hello'
+end
+
+return M
+```
+
+## devdocker
+
+### Prerequisites
+
 - docker
 
-## Usage
+### Usage
 
-### devdocker
-
-`etherswangel/ros` and `etherswangel/dev` is available in `dockerhub`.
+`etherswangel/ros` and `etherswangel/dev` are available on `dockerhub`.
 
 `xproj` is a simple script to help use devdocker containers, modify the script to mount volumes.
 
@@ -26,11 +58,11 @@ Files under `_etc` will override default ones, currently `etc/init`(empty) and `
 
 For more details, please see `devdocker/dev:noetic/example` and `devdocker/dev:humble/example`.
 
-### devpy
+## devpy
 
 not ready
 
-### devcpp
+## devcpp
 
 not ready
 

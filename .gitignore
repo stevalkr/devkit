@@ -1,3 +1,7 @@
 # not ready
 /devpy
 /devcpp
+
+/.cache
+/_build*
+/compile_flags.txt
