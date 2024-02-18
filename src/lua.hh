@@ -1,12 +1,14 @@
 #pragma once
 
+#include <cassert>
 #include <filesystem>
-#include <fmt/core.h>
 #include <lua.hpp>
 #include <map>
 #include <optional>
 #include <string>
 #include <type_traits>
+
+#include "fmt.hh"
 
 namespace devkit
 {
@@ -57,7 +59,7 @@ private:
       const auto errorMsg = std::string{ lua_tostring(L, -1) };
       lua_pop(L, 1);
 
-      fmt::println(stderr, "Lua: error {}", errorMsg);
+      error("Lua: error {}", errorMsg);
       return false;
     }
     return true;
@@ -90,7 +92,7 @@ private:
           lua_pop(L, 1);
         }
         else {
-          fmt::println(stderr, "Lua: Wrong return type.");
+          error("Lua: Wrong return type.");
           exit(1);
         }
       }
@@ -132,7 +134,7 @@ private:
       }
     }
     else {
-      fmt::println(stderr, "Lua: Wrong argument type!");
+      error("Lua: Wrong argument type!");
       exit(1);
     }
   }
@@ -147,7 +149,7 @@ private:
       const auto errorMsg = std::string{ lua_tostring(L, -1) };
       lua_pop(L, 1);
 
-      fmt::println(stderr, "Lua: error {}", errorMsg);
+      error("Lua: error {}", errorMsg);
       return std::nullopt;
     }
 
@@ -240,6 +242,25 @@ public:
     lua_register(L, name.c_str(), function);
   }
 
+  template<size_t Size>
+  void
+  register_module(const std::string& name,
+                  const std::array<luaL_Reg, Size>& reg)
+  {
+    static luaL_Reg arr[Size];
+    std::copy(reg.begin(), reg.end(), arr);
+
+    luaL_requiref(
+      L,
+      name.c_str(),
+      [](lua_State* L) -> int {
+        luaL_newlib(L, arr);
+        return 1;
+      },
+      1);
+    lua_pop(L, 1);
+  }
+
   template<typename Ret, typename... Args>
   std::optional<Ret>
   call_module(const std::string& name, Args... args)
@@ -249,7 +270,7 @@ public:
     if (!lua_isfunction(L, -1)) {
       lua_pop(L, 1);
 
-      fmt::println(stderr, "Lua: No member function: {}", name);
+      error("Lua: No member function: {}", name);
       return std::nullopt;
     }
 
@@ -265,7 +286,7 @@ public:
     if (!lua_isfunction(L, -1)) {
       lua_pop(L, 1);
 
-      fmt::println(stderr, "Lua: No global function: {}", name);
+      error("Lua: No global function: {}", name);
       return std::nullopt;
     }
 

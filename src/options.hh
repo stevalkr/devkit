@@ -1,9 +1,10 @@
 #pragma once
 
 #include <cxxopts.hpp>
-#include <fmt/core.h>
 #include <string>
 #include <vector>
+
+#include "fmt.hh"
 
 namespace devkit
 {
@@ -24,7 +25,7 @@ struct OptionsArg
   opt_str() const
   {
     if (short_opt.has_value()) {
-      return fmt::format("{},{}", short_opt.value(), opt);
+      return fmt("{},{}", short_opt.value(), opt);
     }
     return opt;
   }
@@ -90,13 +91,13 @@ public:
   void
   print_help()
   {
-    fmt::println("{}", options.help());
+    log("{}", options.help());
   }
 
   void
   print_version()
   {
-    fmt::println("Version: {}", version);
+    log("Version: {}", version);
   }
 };
 

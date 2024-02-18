@@ -1,12 +1,13 @@
 #pragma once
 
-#include <fmt/core.h>
 #include <sstream>
 #include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
+
+#include "fmt.hh"
 
 namespace devkit
 {
@@ -61,8 +62,7 @@ private:
       execv(args[0], args.data());
     }
 
-    fmt::println(
-      stderr, "Task: Error executing {}.", arg.search_path ? "execvp" : "execv");
+    error("Task: Error executing {}.", arg.search_path ? "execvp" : "execv");
     exit(EXIT_FAILURE);
   }
 
@@ -76,7 +76,7 @@ public:
   {
     auto tokens = arg.tokens();
     if (tokens.empty()) {
-      fmt::println(stderr, "Task: No command specified.");
+      error("Task: No command specified.");
       return -1;
     }
 
@@ -85,7 +85,7 @@ public:
 
       switch (pid) {
         case -1: {
-          fmt::println(stderr, "Task: Fork failed.");
+          error("Task: Fork failed.");
           return -1;
         }
 

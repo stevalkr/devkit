@@ -7,15 +7,19 @@ project('devkit', 'cpp',
     }
   )
 
-notest_arg = [
+if get_option('buildtype') == 'debug'
+  test_args = [
+    '-fsanitize=address',
+    '-fsanitize=undefined',
+    '-fno-omit-frame-pointer',
+    ]
+else
+  test_args = []
+endif
+
+comp_args = test_args + [
   # '-DCXXOPTS_NO_EXCEPTIONS',
   '-DDOCTEST_CONFIG_DISABLE',
-  ]
-
-sanitize_arg = [
-  '-fsanitize=address',
-  '-fsanitize=undefined',
-  '-fno-omit-frame-pointer',
   ]
 
 
@@ -44,7 +48,9 @@ executable('sk', [
     ] + srcs,
   dependencies: deps,
   include_directories: inc_dirs,
-  cpp_args: notest_arg,
+  cpp_args: comp_args,
+  link_args: comp_args,
+  install: true,
   )
 
 
@@ -67,6 +73,8 @@ foreach file : srcs
     gen.process(file),
     dependencies: test_dep,
     include_directories: inc_dirs,
+    cpp_args: test_args,
+    link_args: test_args,
     )
   test(name, exec)
 endforeach

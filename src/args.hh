@@ -1,8 +1,9 @@
 #pragma once
 
-#include <fmt/core.h>
 #include <string>
 #include <vector>
+
+#include "fmt.hh"
 
 namespace devkit
 {
@@ -54,7 +55,7 @@ public:
         }
       }
       else {
-        fmt::println(stderr, "Args: Error parsing arguments!");
+        error("Args: Error parsing arguments!");
         exit(1);
       }
 
