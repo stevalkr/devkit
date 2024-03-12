@@ -16,39 +16,44 @@ namespace devkit
 namespace details
 {
 
-template<class T>
+template<typename T>
 struct is_map : std::false_type
 {};
 
-template<class Key, class Value>
-struct is_map<std::map<Key, Value>> : std::true_type
+template<typename Key, typename Val>
+struct is_map<std::map<Key, Val>> : std::true_type
 {};
 
-template<class Key, class Value>
-struct is_map<std::unordered_map<Key, Value>> : std::true_type
+template<typename Key, typename Val>
+struct is_map<std::unordered_map<Key, Val>> : std::true_type
 {};
 
-template<class T>
+template<typename T>
 constexpr bool is_map_v = is_map<T>::value;
 
-template<typename T, typename = void>
+template<typename T, typename = void, typename = void>
 struct is_iterable : std::false_type
 {};
 
 template<typename T>
-struct is_iterable<T,
-                   std::void_t<decltype(std::begin(std::declval<T>())),
-                               decltype(std::end(std::declval<T>()))>>
+struct is_iterable<
+  T,
+  typename std::void_t<decltype(std::begin(std::declval<T>())),
+                       decltype(std::end(std::declval<T>()))>,
+  typename std::enable_if_t<!is_map_v<T> && !std::is_same_v<T, std::string>>>
   : std::true_type
 {};
 
-template<class T>
+template<typename T>
 constexpr bool is_iterable_v = is_iterable<T>::value;
 
 } // namespace details
 
 class Lua
 {
+public:
+  using map = std::map<std::string, std::string>;
+
 private:
   lua_State* L;
 
@@ -59,44 +64,79 @@ private:
       const auto errorMsg = std::string{ lua_tostring(L, -1) };
       lua_pop(L, 1);
 
-      error("Lua: error {}", errorMsg);
+      dk_err("Lua: error {}", errorMsg);
       return false;
     }
     return true;
   }
 
   template<typename Ret>
-  Ret
+  std::enable_if_t<details::is_map_v<Ret>, Ret>
+  get_return_value()
+  {
+    using Key = typename Ret::key_type;
+    using Val = typename Ret::mapped_type;
+
+    Ret map;
+    lua_pushnil(L);
+
+    while (lua_next(L, -2) != 0) {
+      if constexpr (std::is_integral_v<Key>) {
+        const auto key = luaL_checkinteger(L, -2);
+        map[key] = get_return_value<Val>();
+        lua_pop(L, 1);
+      }
+      else if constexpr (std::is_same_v<Key, std::string>) {
+        const auto key = std::string{ luaL_checkstring(L, -2) };
+        map[key] = get_return_value<Val>();
+        lua_pop(L, 1);
+      }
+      else {
+        dk_err("Lua: Wrong return type.");
+        exit(1);
+      }
+    }
+
+    return map;
+  }
+
+  template<typename Ret>
+  std::enable_if_t<details::is_iterable_v<Ret>, Ret>
+  get_return_value()
+  {
+    using Val = Ret::value_type;
+
+    Ret vec;
+    lua_pushnil(L);
+
+    while (lua_next(L, -2) != 0) {
+      vec.push_back(get_return_value<Val>());
+      lua_pop(L, 1);
+    }
+
+    return vec;
+  }
+
+  template<typename Ret>
+  std::enable_if_t<!details::is_map_v<Ret> && !details::is_iterable_v<Ret>, Ret>
   get_return_value()
   {
     if constexpr (std::is_same_v<Ret, bool>) {
       return static_cast<bool>(lua_toboolean(L, -1));
     }
-    else if constexpr (std::is_same_v<Ret, int>) {
+    else if constexpr (std::is_integral_v<Ret>) {
       return luaL_checkinteger(L, -1);
     }
-    else if constexpr (std::is_same_v<Ret, double>) {
+    else if constexpr (std::is_same_v<Ret, double> ||
+                       std::is_same_v<Ret, float>) {
       return luaL_checknumber(L, -1);
     }
     else if constexpr (std::is_same_v<Ret, std::string>) {
       return std::string{ luaL_checkstring(L, -1) };
     }
-    else if constexpr (details::is_map_v<Ret>) {
-      std::map<std::string, std::string> map;
-      lua_pushnil(L);
-      while (lua_next(L, -2) != 0) {
-        if (lua_isstring(L, -1) && lua_isstring(L, -2)) {
-          auto key = std::string{ lua_tostring(L, -2) };
-          auto value = std::string{ lua_tostring(L, -1) };
-          map[key] = value;
-          lua_pop(L, 1);
-        }
-        else {
-          error("Lua: Wrong return type.");
-          exit(1);
-        }
-      }
-      return map;
+    else {
+      dk_err("Lua: Return type not supported!");
+      exit(1);
     }
   }
 
@@ -110,7 +150,8 @@ private:
     else if constexpr (std::is_same_v<Arg, int>) {
       lua_pushinteger(L, arg);
     }
-    else if constexpr (std::is_same_v<Arg, double>) {
+    else if constexpr (std::is_same_v<Arg, double> ||
+                       std::is_same_v<Arg, float>) {
       lua_pushnumber(L, arg);
     }
     else if constexpr (std::is_same_v<Arg, std::string>) {
@@ -134,7 +175,7 @@ private:
       }
     }
     else {
-      error("Lua: Wrong argument type!");
+      dk_err("Lua: Wrong argument type!");
       exit(1);
     }
   }
@@ -149,7 +190,7 @@ private:
       const auto errorMsg = std::string{ lua_tostring(L, -1) };
       lua_pop(L, 1);
 
-      error("Lua: error {}", errorMsg);
+      dk_err("Lua: error {}", errorMsg);
       return std::nullopt;
     }
 
@@ -160,8 +201,6 @@ private:
   }
 
 public:
-  using map = std::map<std::string, std::string>;
-
   Lua()
   {
     L = luaL_newstate();
@@ -231,6 +270,15 @@ public:
   void
   exec_file(const std::filesystem::path& filepath)
   {
+    if (!checkLua(luaL_dostring(
+          L,
+          ("package.path = package.path .. ';" +
+           (filepath.parent_path() / "?.lua").string() + ";" +
+           (filepath.parent_path() / "?/init.lua").string() + ";'")
+            .c_str()))) {
+      lua_close(L);
+    }
+
     if (!checkLua(luaL_dofile(L, filepath.c_str()))) {
       lua_close(L);
     }
@@ -270,7 +318,7 @@ public:
     if (!lua_isfunction(L, -1)) {
       lua_pop(L, 1);
 
-      error("Lua: No member function: {}", name);
+      dk_err("Lua: No member function: {}", name);
       return std::nullopt;
     }
 
@@ -286,7 +334,7 @@ public:
     if (!lua_isfunction(L, -1)) {
       lua_pop(L, 1);
 
-      error("Lua: No global function: {}", name);
+      dk_err("Lua: No global function: {}", name);
       return std::nullopt;
     }
 
@@ -345,6 +393,53 @@ TEST_CASE("testing lua")
     CHECK(result.has_value());
     CHECK(result.value()["one"] == "2");
     CHECK(result.value()["two"] == "4");
+  }
+
+  SUBCASE("complex map")
+  {
+    auto lua = devkit::Lua{ R"(
+      local M = {}
+      M.test_complex_map = function ()
+        map = {}
+        map['num'] = { '1', '2' }
+        map['str'] = { 'one', 'two' }
+        return map
+      end
+      return M
+      )" };
+
+    auto result =
+      lua.call_module<std::map<std::string, std::map<int, std::string>>>(
+        "test_complex_map");
+
+    CHECK(result.has_value());
+    CHECK(result.value()["num"][1] == "1");
+    CHECK(result.value()["num"][2] == "2");
+    CHECK(result.value()["str"][1] == "one");
+    CHECK(result.value()["str"][2] == "two");
+  }
+
+  SUBCASE("complex map array")
+  {
+    auto lua = devkit::Lua{ R"(
+      local M = {}
+      M.test_complex_map = function ()
+        map = {}
+        map['one'] = { 1, 2 }
+        map['two'] = { 3, 4 }
+        return map
+      end
+      return M
+      )" };
+
+    auto result = lua.call_module<std::map<std::string, std::vector<uint8_t>>>(
+      "test_complex_map");
+
+    CHECK(result.has_value());
+    CHECK(result.value()["one"][0] == 1);
+    CHECK(result.value()["one"][1] == 2);
+    CHECK(result.value()["two"][0] == 3);
+    CHECK(result.value()["two"][1] == 4);
   }
 }
 

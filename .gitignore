@@ -2,6 +2,7 @@
 /devpy
 /devcpp
 
+.DS_Store
 /.cache
 /_build*
 /compile_flags.txt

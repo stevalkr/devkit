@@ -9,6 +9,7 @@ project('devkit', 'cpp',
 
 if get_option('buildtype') == 'debug'
   test_args = [
+    '-DDEBUG',
     '-fsanitize=address',
     '-fsanitize=undefined',
     '-fno-omit-frame-pointer',
@@ -18,7 +19,6 @@ else
 endif
 
 comp_args = test_args + [
-  # '-DCXXOPTS_NO_EXCEPTIONS',
   '-DDOCTEST_CONFIG_DISABLE',
   ]
 
@@ -30,14 +30,13 @@ comp_args = test_args + [
 deps = [
   dependency('fmt'),
   dependency('lua'),
-  # dependency('cxxopts'),
   ]
 
 srcs = [
   './src/args.hh',
   './src/defer.hh',
+  './src/fmt.hh',
   './src/lua.hh',
-  # './src/options.hh',
   './src/task.hh',
   ]
 

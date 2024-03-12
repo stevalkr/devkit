@@ -26,6 +26,12 @@ public:
   explicit Defer(Fn&& fn)
     : fn{ std::forward<Fn>(fn) }
   {}
+  Defer&
+  operator=(Defer&& other) = delete;
+
+  Defer(const Defer&) = delete;
+  Defer&
+  operator=(const Defer&) = delete;
 
   ~Defer()
   {
