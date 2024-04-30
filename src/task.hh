@@ -17,6 +17,7 @@ namespace details
 
 struct TaskArg
 {
+  bool use_shell;
   bool new_process;
   bool search_path;
   const std::string command;
@@ -24,10 +25,49 @@ struct TaskArg
   std::vector<std::string>
   tokens() const
   {
-    auto iss = std::istringstream{ command };
-    auto tokens =
-      std::vector<std::string>{ std::istream_iterator<std::string>{ iss },
-                                std::istream_iterator<std::string>{} };
+    // auto iss = std::istringstream{ command };
+    // auto tokens =
+    //   std::vector<std::string>{ std::istream_iterator<std::string>{ iss },
+    //                             std::istream_iterator<std::string>{} };
+    // return tokens;
+
+    std::vector<std::string> tokens;
+
+    std::string accumulated;
+    bool in_quotes = false;
+    char current_quote_char = 0;
+
+    for (char ch : command) {
+      if (ch == '"' || ch == '\'') {
+        if (in_quotes && ch == current_quote_char) {
+          // Closing quote
+          in_quotes = false;
+          current_quote_char = 0;
+        }
+        else if (!in_quotes) {
+          // Opening quote
+          in_quotes = true;
+          current_quote_char = ch;
+        }
+      }
+      else if (std::isspace(ch) && !in_quotes) {
+        if (!accumulated.empty()) {
+          tokens.push_back(accumulated);
+          accumulated.clear();
+        }
+      }
+      else {
+        accumulated += ch;
+      }
+    }
+
+    if (!accumulated.empty()) {
+      if (in_quotes) {
+        dk_err("Task: Quote {} not closed.", current_quote_char);
+      }
+      tokens.push_back(accumulated);
+    }
+
     return tokens;
   }
 
@@ -74,6 +114,10 @@ public:
   int
   run() const
   {
+    if (arg.use_shell) {
+      return std::system(arg.command.c_str());
+    }
+
     auto tokens = arg.tokens();
     if (tokens.empty()) {
       dk_err("Task: No command specified.");
@@ -108,9 +152,9 @@ public:
 
           if (WIFSIGNALED(status)) {
             dk_log("Process {} killed: signal {}{}",
-                pid,
-                WTERMSIG(status),
-                WCOREDUMP(status) ? " - core dumped" : "");
+                   pid,
+                   WTERMSIG(status),
+                   WCOREDUMP(status) ? " - core dumped" : "");
             return 1;
           }
         }
@@ -144,6 +188,22 @@ TEST_CASE("testing task")
     CHECK(std::string{ args[2] } == "-a");
     CHECK(std::string{ args[3] } == "./dir");
     CHECK(args[4] == nullptr);
+  }
+
+  SUBCASE("task arg with spaces")
+  {
+    auto tokens =
+      devkit::details::TaskArg{
+        .command = "command 'argument with spaces' \"another set of argument\""
+      }
+        .tokens();
+    const auto args = devkit::details::TaskArg::parse_tokens(tokens);
+
+    CHECK(args.size() == 4);
+    CHECK(std::string{ args[0] } == "command");
+    CHECK(std::string{ args[1] } == "argument with spaces");
+    CHECK(std::string{ args[2] } == "another set of argument");
+    CHECK(args[3] == nullptr);
   }
 
   SUBCASE("task without command")

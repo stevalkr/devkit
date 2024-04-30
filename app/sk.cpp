@@ -29,6 +29,22 @@ lua_set_env(lua_State* L)
 }
 
 extern "C" int
+lua_get_env(lua_State* L)
+{
+  const auto name = std::string{ luaL_checkstring(L, 1) };
+  const auto value = std::string{ getenv(name.data()) };
+
+  if (!value.empty()) {
+    lua_pushstring(L, value.data());
+  }
+  else {
+    lua_pushnil(L);
+  }
+
+  return 1;
+}
+
+extern "C" int
 lua_list_dir(lua_State* L)
 {
   if (lua_gettop(L) != 1 || !lua_isstring(L, 1)) {
@@ -193,6 +209,7 @@ main(int argc, char** argv)
                                        luaL_Reg{ "split_path", lua_split_path },
                                        luaL_Reg{ nullptr, nullptr } };
   constexpr auto sh_func = std::array{ luaL_Reg{ "set_env", lua_set_env },
+                                       luaL_Reg{ "get_env", lua_get_env },
                                        luaL_Reg{ nullptr, nullptr } };
 
   auto lua = dk::Lua{ apps / "sk.lua" };
@@ -242,10 +259,12 @@ main(int argc, char** argv)
     }
   };
 
-  set_default(task_args, { "new_process", "search_path", "command" });
+  set_default(task_args,
+              { "use_shell", "new_process", "search_path", "command" });
 
   const auto task =
-    dk::Task{ { .new_process = to_bool(task_args.at("new_process")),
+    dk::Task{ { .use_shell = to_bool(task_args.at("use_shell")),
+                .new_process = to_bool(task_args.at("new_process")),
                 .search_path = to_bool(task_args.at("search_path")),
                 .command = task_args.at("command") } };
   return task.run();
