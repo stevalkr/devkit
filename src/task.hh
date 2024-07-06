@@ -115,7 +115,14 @@ public:
   run() const
   {
     if (arg.use_shell) {
-      return std::system(arg.command.c_str());
+      auto status = std::system(arg.command.c_str());
+      if (status < 0) {
+        dk_err("Task: Error executing system.");
+        return 1;
+      }
+      else {
+        return WEXITSTATUS(status);
+      }
     }
 
     auto tokens = arg.tokens();
