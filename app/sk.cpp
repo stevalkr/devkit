@@ -212,9 +212,14 @@ main(int argc, char** argv)
                                        luaL_Reg{ "get_env", lua_get_env },
                                        luaL_Reg{ nullptr, nullptr } };
 
-  auto lua = dk::Lua{ apps / "sk.lua" };
+  auto lua = dk::Lua{};
   lua.register_module("fs", fs_func);
   lua.register_module("sh", sh_func);
+  lua.exec_file(apps / "sk.lua");
+  if (options.find("y") != options.end() ||
+      options.find("confirm") != options.end()) {
+    lua.register_variable("Confirmed", true);
+  }
 
   if (command == "help") {
     auto cmd = std::string{};

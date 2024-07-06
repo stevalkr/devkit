@@ -121,6 +121,7 @@ public:
         return 1;
       }
       else {
+        dk_log("Process in shell returned {}", WEXITSTATUS(status));
         return WEXITSTATUS(status);
       }
     }

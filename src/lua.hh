@@ -284,6 +284,14 @@ public:
     }
   }
 
+  template<typename Arg>
+  void
+  register_variable(const std::string& name, Arg arg)
+  {
+    push_arg(arg);
+    lua_setglobal(L, name.c_str());
+  }
+
   void
   register_function(const std::string& name, lua_CFunction function)
   {
