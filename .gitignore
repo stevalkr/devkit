@@ -1,8 +1,5 @@
-# not ready
-/devpy
-/devcpp
-
 .DS_Store
 /.cache
+/result
 /_build*
 /compile_flags.txt
