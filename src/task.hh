@@ -128,8 +128,7 @@ public:
 
     auto tokens = arg.tokens();
     if (tokens.empty()) {
-      dk_err("Task: No command specified.");
-      return 1;
+      return 0;
     }
 
     if (arg.new_process) {
