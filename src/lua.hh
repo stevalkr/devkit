@@ -1,12 +1,13 @@
 #pragma once
 
-#include <cassert>
 #include <filesystem>
 #include <lua.hpp>
 #include <map>
 #include <optional>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
+#include <vector>
 
 #include "fmt.hh"
 
@@ -104,7 +105,7 @@ private:
   std::enable_if_t<details::is_iterable_v<Ret>, Ret>
   get_return_value()
   {
-    using Val = Ret::value_type;
+    using Val = typename Ret::value_type;
 
     Ret vec;
     lua_pushnil(L);

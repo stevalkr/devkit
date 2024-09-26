@@ -1,9 +1,11 @@
 #pragma once
 
+#include <array>
 #include <deque>
-#include <ranges>
+#include <optional>
 #include <regex>
 #include <string>
+#include <unordered_map>
 
 #include "fmt.hh"
 
