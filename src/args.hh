@@ -209,16 +209,18 @@ private:
 
       std::vector<std::string> opts;
       std::for_each(
-        std::sregex_token_iterator{ s.begin(), s.end(), re_delimiter, -1 },
+        std::sregex_token_iterator{
+          s.begin(), s.end(), re_options_delimiter, -1 },
         std::sregex_token_iterator{},
         [&](const std::string& match) {
           opts.push_back(match);
         });
 
-      for (const auto& opt : opts) {
+      for (auto& opt : opts) {
         if (opt.empty()) {
           continue;
         }
+        opt = std::regex_replace(opt, std::regex{ "\\n\\s*" }, " ");
 
         if (opt[0] != '-') {
           dk_err("Args: Error parsing document \"{}\"!", opt);
@@ -234,10 +236,10 @@ private:
           continue;
         }
 
-        auto&& short_name = match.str(1);
-        auto&& long_name = match.str(2);
-        auto&& value_type = match.str(3);
-        auto&& description = match.str(4);
+        const auto& short_name = match.str(1);
+        const auto& long_name = match.str(2);
+        const auto& value_type = match.str(3);
+        const auto& description = match.str(4);
         std::shared_ptr<details::Option> option = nullptr;
 
         bool exist_long = options.exist(long_name);
@@ -383,10 +385,17 @@ TEST_CASE("testing document")
   const auto doc = R"(
       Usage: test args [-abc] [--path --store]
 
+      Commands:
+        cmd1            This is cmd1
+        cmd2            This is cmd2
+
       Options:
         -a, --A         This is a
         -b, --B         This is b
         -c, --C <file>  This is c
+                        with new line
+
+      More Options:
         --path  <dir>   This is path
         --store <dir>   This is store
       )";
@@ -418,7 +427,7 @@ TEST_CASE("testing document")
     CHECK(args.options["B"]->description == "This is b");
     CHECK(args.options["C"] == args.options["c"]);
     CHECK(args.options["C"]->value_type == "file");
-    CHECK(args.options["C"]->description == "This is c");
+    CHECK(args.options["C"]->description == "This is c with new line");
     CHECK(args.options["store"]->value_type == "dir");
     CHECK(args.options["store"]->description == "This is store");
     CHECK(args.rest_arguments[0] == "rest1");

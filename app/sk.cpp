@@ -177,7 +177,6 @@ main(int argc, char** argv)
 {
   const auto home = fs::path{ std::getenv("HOME") };
   auto args = dk::Args{ argc, const_cast<const char**>(argv) };
-  const auto options = args.options.to_map();
 
   if (args.subcommands.empty()) {
     dk_err("No subcommand specified.");
@@ -188,8 +187,8 @@ main(int argc, char** argv)
   args.subcommands.pop_front();
 
   auto store = home / ".devkit";
-  if (options.find("store") != options.end()) {
-    store = options.at("store");
+  if (args.options.exist("store") && args.options["store"]->value.has_value()) {
+    store = args.options["store"]->value.value();
   }
 
   if (!fs::is_directory(store)) {
@@ -216,24 +215,28 @@ main(int argc, char** argv)
   lua.register_module("fs", fs_func);
   lua.register_module("sh", sh_func);
   lua.exec_file(apps / "sk.lua");
-  if (options.find("y") != options.end() ||
-      options.find("confirm") != options.end()) {
-    lua.register_variable("Confirmed", true);
+
+  const auto help_msg = lua.call_module<std::string>("help", command);
+  if (!help_msg.has_value()) {
+    dk_log("Help message not found.");
+    exit(1);
   }
 
-  if (command == "help") {
+  args.document(help_msg.value());
+  const auto options = args.options.to_map();
+
+  if (command == "help" || options.find("help") != options.end()) {
     auto cmd = std::string{};
     if (!args.subcommands.empty()) {
       cmd = args.subcommands.front();
     }
 
-    const auto help_msg = lua.call_module<std::string>(command, cmd);
-    if (!help_msg.has_value()) {
-      dk_err("Help message not found.");
-      exit(1);
-    }
     dk_log("{}", help_msg.value());
     return 0;
+  }
+
+  if (options.find("confirm") != options.end()) {
+    lua.register_variable("Confirmed", true);
   }
 
   const auto result = lua.call_module<dk::Lua::map>(command,
