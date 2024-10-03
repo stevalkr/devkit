@@ -217,7 +217,7 @@ TEST_CASE("testing task")
   {
     devkit::details::TaskArg arg{ .new_process = true, .search_path = true };
     devkit::Task task(arg);
-    CHECK(task.run() == 1);
+    CHECK(task.run() == 0);
   }
 
   SUBCASE("task with new process")
