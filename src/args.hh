@@ -4,6 +4,7 @@
 #include <deque>
 #include <optional>
 #include <regex>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -15,66 +16,77 @@ namespace devkit
 namespace details
 {
 
-inline std::string
-trim(const std::string& str)
-{
-  const auto is_space_or_newline = [](unsigned char ch) {
-    return std::isspace(ch) || ch == '\n';
-  };
-
-  const auto start =
-    std::find_if_not(str.begin(), str.end(), is_space_or_newline);
-  const auto end =
-    std::find_if_not(str.rbegin(), str.rend(), is_space_or_newline).base();
-
-  if (start >= end) {
-    return "";
-  }
-
-  return std::string{ start, end };
-}
-
-struct Option
-{
-  std::string short_name;
-  std::string long_name;
-  std::string value_type;
-  std::string description;
-  std::optional<std::string> value;
-};
-
 class Options
 {
 private:
-  std::unordered_map<std::string, std::shared_ptr<Option>> options;
-
-public:
-  std::shared_ptr<Option>&
-  operator[](const std::string& key)
+  struct Option
   {
-    if (options.find(key) == options.end() || options.at(key) == nullptr) {
-      options[key] = std::make_shared<Option>();
+    std::string short_name;
+    std::string long_name;
+    std::string value_type;
+    std::string description;
+    std::optional<std::string> value;
+
+    bool
+    to_bool()
+    {
+      if (value.has_value()) {
+        return value.value() == "true";
+      }
+      return false;
     }
-    return options.at(key);
-  }
+
+    std::string
+    to_string()
+    {
+      if (value.has_value()) {
+        return value.value();
+      }
+      return "";
+    }
+  };
+
+  std::set<std::shared_ptr<Option>> options_doc;
+  std::unordered_map<std::string, std::shared_ptr<Option>> options_map;
 
   bool
   exist(const std::string& key)
   {
-    if (const auto it = options.find(key);
-        it != options.end() && options.at(key) != nullptr) {
+    if (options_map.find(key) != options_map.end() &&
+        options_map.at(key) != nullptr) {
       return true;
     }
     return false;
   }
 
+public:
+  std::shared_ptr<Option>&
+  operator[](const std::string& key)
+  {
+    if (!exist(key)) {
+      options_map[key] = std::make_shared<Option>();
+    }
+    return options_map.at(key);
+  }
+
+  std::set<std::shared_ptr<Option>>
+  doc()
+  {
+    return options_doc;
+  }
+
   void
   set_short(std::string&& key, std::string&& val)
   {
+    std::shared_ptr<Option> option = nullptr;
     if (exist(key)) {
       dk_err("Args: Option {} is set twice! \"{}\" is used.", key, val);
+      option = options_map[key];
     }
-    auto& option = this->operator[](key);
+    else {
+      option = std::make_shared<Option>();
+      options_map[key] = option;
+    }
     option->short_name = std::move(key);
     option->value = std::move(val);
   }
@@ -82,12 +94,57 @@ public:
   void
   set_long(std::string&& key, std::string&& val)
   {
+    std::shared_ptr<Option> option = nullptr;
     if (exist(key)) {
       dk_err("Args: Option {} is set twice! \"{}\" is used.", key, val);
+      option = options_map[key];
     }
-    auto& option = this->operator[](key);
+    else {
+      option = std::make_shared<Option>();
+      options_map[key] = option;
+    }
     option->long_name = std::move(key);
     option->value = std::move(val);
+  }
+
+  void
+  add_document(const std::string& short_name,
+               const std::string& long_name,
+               const std::string& value_type,
+               const std::string& description)
+  {
+    std::shared_ptr<Option> option = nullptr;
+
+    bool exist_long = exist(long_name);
+    bool exist_short = exist(short_name);
+
+    if (exist_long) {
+      option = options_map[long_name];
+    }
+    else if (exist_short) {
+      option = options_map[short_name];
+    }
+    else {
+      option = std::make_shared<Option>();
+    }
+
+    if (exist_long && exist_short) {
+      dk_err("Args: Option {},{} is set twice! \"{}\" is used.",
+             short_name,
+             long_name,
+             option->value.value());
+    }
+
+    option->long_name = long_name;
+    option->short_name = short_name;
+    option->value_type = value_type;
+    option->description = description;
+
+    options_map[long_name] = option;
+    if (!short_name.empty()) {
+      options_map[short_name] = option;
+    }
+    options_doc.insert(option);
   }
 
   std::unordered_map<std::string, std::string>
@@ -95,8 +152,8 @@ public:
   {
     auto map = std::unordered_map<std::string, std::string>{};
 
-    for (const auto& pair : options) {
-      if (pair.first == "" || pair.second == nullptr ||
+    for (const auto& pair : options_map) {
+      if (pair.first.empty() || pair.second == nullptr ||
           !pair.second->value.has_value()) {
         continue;
       }
@@ -104,11 +161,11 @@ public:
       const auto& option = pair.second;
       const auto& value = option->value.value();
 
-      if (option->long_name != "") {
+      if (!option->long_name.empty()) {
         map[option->long_name] = value;
       }
 
-      if (option->short_name != "") {
+      if (!option->short_name.empty()) {
         map[option->short_name] = value;
       }
     }
@@ -150,6 +207,7 @@ public:
       }
       else if (arg_size > 1 && arg[0] == '-' && arg[1] != '-') {
         for (int j = 1; j < arg_size; j += 1) {
+          // TODO: support "-n <name>" style
           options.set_short(std::string{ arg[j] }, std::string{ "true" });
         }
       }
@@ -189,15 +247,89 @@ public:
   void
   document(const std::string& doc)
   {
+    parse_commands(doc);
     parse_options(doc);
+  }
+
+  std::deque<std::pair<std::string, std::string>>
+  complete(std::string prefix)
+  {
+    auto completions = std::deque<std::pair<std::string, std::string>>{};
+
+    bool check_long = false;
+    bool check_short = false;
+
+    if (prefix.empty() || prefix == "-") {
+      check_long = true;
+      check_short = true;
+    }
+    else if (prefix[0] == '-') {
+      if (prefix[1] == '-') {
+        check_long = true;
+      }
+      else if (std::isalpha(prefix[1])) {
+        check_short = true;
+      }
+    }
+    else {
+      // check subcommands
+    }
+
+    const auto pos = prefix.find_first_not_of('-');
+    if (pos != std::string::npos) {
+      prefix = prefix.substr(pos);
+    }
+    else {
+      prefix.clear();
+    }
+
+    for (const auto& option : options.doc()) {
+      if (check_long && !option->long_name.empty() &&
+          option->long_name.starts_with(prefix)) {
+        completions.emplace_back("--" + option->long_name, option->description);
+      }
+      if (check_short && !option->short_name.empty()) {
+        completions.emplace_back("-" + option->short_name, option->description);
+      }
+    }
+
+    return completions;
   }
 
 private:
   void
+  parse_commands(const std::string& doc)
+  {
+    const std::regex re_delimiter{ "(?:^|\\n)\\s*" };
+
+    for (auto s : parse_section(doc, "commands:")) {
+      if (const auto pos = s.find(':'); pos != std::string::npos) {
+        s.erase(0, pos + 1);
+      }
+
+      std::vector<std::string> cmds;
+      std::for_each(
+        std::sregex_token_iterator{ s.begin(), s.end(), re_delimiter, -1 },
+        std::sregex_token_iterator{},
+        [&](const std::string& match) {
+          cmds.push_back(match);
+        });
+
+      for (auto& cmd : cmds) {
+        cmd = std::regex_replace(cmd, std::regex("^\\s+|\\s+$"), "");
+
+        if (cmd.empty()) {
+          continue;
+        }
+      }
+    }
+  }
+
+  void
   parse_options(const std::string& doc)
   {
     const std::regex re_delimiter{
-      "(?:^|\\n)[ \\t]*" // a new line with leading whitespace
+      "(?:^|\\n)\\s*" // a new line with leading whitespace
       "(?=-{1,2})" // [split happens here] (positive lookahead) ... and followed
                    // by one or two hyphes
     };
@@ -209,18 +341,19 @@ private:
 
       std::vector<std::string> opts;
       std::for_each(
-        std::sregex_token_iterator{
-          s.begin(), s.end(), re_options_delimiter, -1 },
+        std::sregex_token_iterator{ s.begin(), s.end(), re_delimiter, -1 },
         std::sregex_token_iterator{},
         [&](const std::string& match) {
           opts.push_back(match);
         });
 
       for (auto& opt : opts) {
+        opt = std::regex_replace(opt, std::regex("^\\s+|\\s+$"), "");
+        opt = std::regex_replace(opt, std::regex("\\s+"), " ");
+
         if (opt.empty()) {
           continue;
         }
-        opt = std::regex_replace(opt, std::regex{ "\\n\\s*" }, " ");
 
         if (opt[0] != '-') {
           dk_err("Args: Error parsing document \"{}\"!", opt);
@@ -236,42 +369,8 @@ private:
           continue;
         }
 
-        const auto& short_name = match.str(1);
-        const auto& long_name = match.str(2);
-        const auto& value_type = match.str(3);
-        const auto& description = match.str(4);
-        std::shared_ptr<details::Option> option = nullptr;
-
-        bool exist_long = options.exist(long_name);
-        bool exist_short = options.exist(short_name);
-
-        if (exist_long) {
-          option = options[long_name];
-        }
-        else if (exist_short) {
-          option = options[short_name];
-        }
-
-        if (option == nullptr) {
-          option = std::make_shared<details::Option>();
-        }
-
-        if (exist_long && exist_short) {
-          dk_err("Args: Option {},{} is set twice! \"{}\" is used.",
-                 short_name,
-                 long_name,
-                 option->value.value());
-        }
-
-        option->long_name = long_name;
-        option->short_name = short_name;
-        option->value_type = value_type;
-        option->description = description;
-
-        options[long_name] = option;
-        if (short_name != "") {
-          options[short_name] = option;
-        }
+        options.add_document(
+          match.str(1), match.str(2), match.str(3), match.str(4));
       }
     }
   }
@@ -293,10 +392,10 @@ private:
 
     std::vector<std::string> ret;
     std::for_each(
-      std::sregex_iterator(doc.begin(), doc.end(), re_section_pattern),
-      std::sregex_iterator(),
+      std::sregex_iterator{ doc.begin(), doc.end(), re_section_pattern },
+      std::sregex_iterator{},
       [&](const std::smatch& match) {
-        ret.push_back(details::trim(match[1].str()));
+        ret.push_back(match[1].str());
       });
     return ret;
   }
@@ -419,9 +518,6 @@ TEST_CASE("testing document")
     CHECK(map.find("b") == map.end());
     CHECK(map.find("B") == map.end());
     CHECK(map.find("store") == map.end());
-    CHECK(args.options.exist("b"));
-    CHECK(args.options.exist("B"));
-    CHECK(!args.options.exist("D"));
     CHECK(args.options["B"] == args.options["b"]);
     CHECK(args.options["B"]->value_type == "");
     CHECK(args.options["B"]->description == "This is b");
@@ -435,6 +531,21 @@ TEST_CASE("testing document")
     CHECK(args.extra_arguments[0] == "--build");
     CHECK(args.extra_arguments[1] == "--");
     CHECK(args.extra_arguments[2] == "-j3");
+  }
+
+  SUBCASE("sub -a -A")
+  {
+    auto argv = std::array{ "test", "sub", "-a", "-A" };
+
+    auto args = devkit::Args(argv.size(), argv.data());
+    args.document(doc);
+
+    auto map = args.options.to_map();
+
+    CHECK(args.program == "test");
+    CHECK(args.subcommands[0] == "sub");
+    CHECK(map["a"] == "true");
+    CHECK(map["A"] == "true");
   }
 }
 #endif

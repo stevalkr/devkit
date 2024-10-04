@@ -178,17 +178,9 @@ main(int argc, char** argv)
   const auto home = fs::path{ std::getenv("HOME") };
   auto args = dk::Args{ argc, const_cast<const char**>(argv) };
 
-  if (args.subcommands.empty()) {
-    dk_err("No subcommand specified.");
-    exit(1);
-  }
-
-  auto command = args.subcommands.front();
-  args.subcommands.pop_front();
-
   auto store = home / ".devkit";
-  if (args.options.exist("store") && args.options["store"]->value.has_value()) {
-    store = args.options["store"]->value.value();
+  if (args.options["store"]->value.has_value()) {
+    store = args.options["store"]->to_string();
   }
 
   if (!fs::is_directory(store)) {
@@ -216,29 +208,57 @@ main(int argc, char** argv)
   lua.register_module("sh", sh_func);
   lua.exec_file(apps / "sk.lua");
 
+  std::string command;
+  bool do_help = false;
+  bool do_complete = false;
+
+  while (!args.subcommands.empty()) {
+    auto cmd = args.subcommands.front();
+    args.subcommands.pop_front();
+    if (cmd == "help") {
+      do_help = true;
+    }
+    else if (cmd == "_complete") {
+      do_complete = true;
+    }
+    else {
+      command = std::move(cmd);
+      break;
+    }
+  }
+
   const auto help_msg = lua.call_module<std::string>("help", command);
   if (!help_msg.has_value()) {
     dk_log("Help message not found.");
-    exit(1);
   }
 
   args.document(help_msg.value());
-  const auto options = args.options.to_map();
 
-  if (command == "help" || options.find("help") != options.end()) {
-    auto cmd = std::string{};
-    if (!args.subcommands.empty()) {
-      cmd = args.subcommands.front();
+  if (do_complete) {
+    auto args_num =
+      std::stoi(std::string{ std::getenv("SK_COMPLETE_ARGS_NUM") });
+    if (args_num >= argc || args_num < 0) {
+      dk_err("Invalid SK_COMPLETE_ARGS_NUM.");
+      return 1;
     }
 
+    auto completes = args.complete({ argv[args_num] });
+    for (const auto& [arg, desc] : completes) {
+      fmt::println("{}\t{}", arg, desc);
+    }
+    return 0;
+  }
+
+  if (do_help || args.options["help"]->to_bool() || command.empty()) {
     dk_log("{}", help_msg.value());
     return 0;
   }
 
-  if (options.find("confirm") != options.end()) {
+  if (args.options["confirm"]->to_bool()) {
     lua.register_variable("Confirmed", true);
   }
 
+  const auto options = args.options.to_map();
   const auto result = lua.call_module<dk::Lua::map>(command,
                                                     fs::current_path().string(),
                                                     args.subcommands,
