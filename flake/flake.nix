@@ -20,8 +20,8 @@ rec {
         };
 
         packages.default = pkgs.callPackage
-          ({ lib, stdenv, lua, fmt, doctest, yaml-cpp, ninja, cmake, meson, pkg-config }:
-            stdenv.mkDerivation {
+          ({ lib, stdenv, lua, fmt, doctest, yaml-cpp, ninja, cmake, meson, pkg-config, installShellFiles }:
+            stdenv.mkDerivation rec{
               pname = "devkit";
               version = "develop";
 
@@ -29,7 +29,11 @@ rec {
               dontUseCmakeConfigure = true;
 
               buildInputs = [ lua fmt doctest yaml-cpp ];
-              nativeBuildInputs = [ ninja cmake meson pkg-config ];
+              nativeBuildInputs = [ ninja cmake meson pkg-config installShellFiles ];
+
+              postInstall = ''
+                installShellCompletion --fish ${src}/completions/sk.fish
+              '';
 
               meta = with lib; {
                 description = "devkit";
