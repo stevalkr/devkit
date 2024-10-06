@@ -16,37 +16,36 @@ namespace devkit
 namespace details
 {
 
+struct Option
+{
+  std::string short_name;
+  std::string long_name;
+  std::string value_type;
+  std::string description;
+  std::optional<std::string> value;
+
+  bool
+  to_bool()
+  {
+    if (value.has_value()) {
+      return value.value() == "true";
+    }
+    return false;
+  }
+
+  std::string
+  to_string()
+  {
+    if (value.has_value()) {
+      return value.value();
+    }
+    return "";
+  }
+};
+
 class Options
 {
 private:
-  struct Option
-  {
-    std::string short_name;
-    std::string long_name;
-    std::string value_type;
-    std::string description;
-    std::optional<std::string> value;
-
-    bool
-    to_bool()
-    {
-      if (value.has_value()) {
-        return value.value() == "true";
-      }
-      return false;
-    }
-
-    std::string
-    to_string()
-    {
-      if (value.has_value()) {
-        return value.value();
-      }
-      return "";
-    }
-  };
-
-  std::set<std::shared_ptr<Option>> options_doc;
   std::unordered_map<std::string, std::shared_ptr<Option>> options_map;
 
   bool
@@ -67,12 +66,6 @@ public:
       options_map[key] = std::make_shared<Option>();
     }
     return options_map.at(key);
-  }
-
-  std::set<std::shared_ptr<Option>>
-  doc()
-  {
-    return options_doc;
   }
 
   void
@@ -107,7 +100,7 @@ public:
     option->value = std::move(val);
   }
 
-  void
+  std::shared_ptr<Option>
   add_document(const std::string& short_name,
                const std::string& long_name,
                const std::string& value_type,
@@ -144,7 +137,8 @@ public:
     if (!short_name.empty()) {
       options_map[short_name] = option;
     }
-    options_doc.insert(option);
+
+    return option;
   }
 
   std::unordered_map<std::string, std::string>
@@ -185,6 +179,10 @@ public:
   std::deque<std::string> extra_arguments;
   details::Options options;
 
+private:
+  std::set<std::pair<std::string, std::string>> commands_doc;
+  std::set<std::shared_ptr<details::Option>> options_doc;
+
 public:
   Args(int argc, const char* argv[])
   {
@@ -197,8 +195,8 @@ public:
     }
 
     while (i < argc) {
-      auto arg = std::string{ argv[i] };
-      auto arg_size = arg.size();
+      const auto arg = std::string{ argv[i] };
+      const auto arg_size = arg.size();
 
       if (arg == "--") {
         std::copy(
@@ -207,8 +205,18 @@ public:
       }
       else if (arg_size > 1 && arg[0] == '-' && arg[1] != '-') {
         for (int j = 1; j < arg_size; j += 1) {
-          // TODO: support "-n <name>" style
-          options.set_short(std::string{ arg[j] }, std::string{ "true" });
+          if (arg[j] == '=') {
+            options.set_short(std::string{ arg[j - 1] }, arg.substr(j + 1));
+            break;
+          }
+          else if (j == arg_size - 1 && i + 1 < argc && argv[i + 1][0] != '-') {
+            i += 1;
+            options.set_short(std::string{ arg[j] }, std::string{ argv[i] });
+            break;
+          }
+          else {
+            options.set_short(std::string{ arg[j] }, std::string{ "true" });
+          }
         }
       }
       else if (arg_size > 2 && arg[0] == '-' && arg[1] == '-') {
@@ -258,8 +266,14 @@ public:
 
     bool check_long = false;
     bool check_short = false;
+    bool check_command = false;
 
-    if (prefix.empty() || prefix == "-") {
+    if (prefix.empty()) {
+      check_long = true;
+      check_short = true;
+      check_command = true;
+    }
+    else if (prefix == "-") {
       check_long = true;
       check_short = true;
     }
@@ -267,12 +281,12 @@ public:
       if (prefix[1] == '-') {
         check_long = true;
       }
-      else if (std::isalpha(prefix[1])) {
+      else {
         check_short = true;
       }
     }
     else {
-      // check subcommands
+      check_command = true;
     }
 
     const auto pos = prefix.find_first_not_of('-');
@@ -283,13 +297,19 @@ public:
       prefix.clear();
     }
 
-    for (const auto& option : options.doc()) {
+    for (const auto& option : options_doc) {
       if (check_long && !option->long_name.empty() &&
           option->long_name.starts_with(prefix)) {
         completions.emplace_back("--" + option->long_name, option->description);
       }
       if (check_short && !option->short_name.empty()) {
         completions.emplace_back("-" + option->short_name, option->description);
+      }
+    }
+
+    for (const auto& [cmd, desc] : commands_doc) {
+      if (check_command && cmd.starts_with(prefix)) {
+        completions.emplace_back(cmd, desc);
       }
     }
 
@@ -321,6 +341,15 @@ private:
         if (cmd.empty()) {
           continue;
         }
+
+        auto match = std::smatch{};
+        auto regex = std::regex{ "(\\S+)(?:\\s+)(.*)" };
+        if (!std::regex_match(cmd, match, regex)) {
+          dk_err("Args: Error parsing commands \"{}\"!", cmd);
+          continue;
+        }
+
+        commands_doc.insert({ match.str(1), match.str(2) });
       }
     }
   }
@@ -356,7 +385,7 @@ private:
         }
 
         if (opt[0] != '-') {
-          dk_err("Args: Error parsing document \"{}\"!", opt);
+          dk_err("Args: Error parsing options \"{}\"!", opt);
           continue;
         }
 
@@ -365,12 +394,13 @@ private:
           "(?:(?:-(\\w)[, ]+\\s*)?--(\\w+)(?:\\s+<(\\w+)>)?)\\s+(.*)"
         };
         if (!std::regex_match(opt, match, regex)) {
-          dk_err("Args: Error parsing document \"{}\"!", opt);
+          dk_err("Args: Error parsing options \"{}\"!", opt);
           continue;
         }
 
-        options.add_document(
+        auto option = options.add_document(
           match.str(1), match.str(2), match.str(3), match.str(4));
+        options_doc.insert(std::move(option));
       }
     }
   }
@@ -417,26 +447,31 @@ TEST_CASE("testing args")
     CHECK(args.options.to_map()["b"] == "true");
   }
 
-  SUBCASE("sub -a --flag=1")
+  SUBCASE("sub -a -bc=2 --flag=1")
   {
-    auto argv = std::array{ "test", "sub", "-a", "--flag=1" };
+    auto argv = std::array{ "test", "sub", "-a", "-bc=2", "--flag=1" };
     auto args = devkit::Args(argv.size(), argv.data());
     CHECK(args.program == "test");
     CHECK(args.subcommands[0] == "sub");
     CHECK(args.options.to_map()["a"] == "true");
+    CHECK(args.options.to_map()["b"] == "true");
+    CHECK(args.options.to_map()["c"] == "2");
     CHECK(args.options.to_map()["flag"] == "1");
   }
 
-  SUBCASE("sub -a --path your_path --flag -- --build -- -j3")
+  SUBCASE("sub -a -bc 2 --path your_path --flag -- --build -- -j3")
   {
-    auto argv = std::array{ "test",   "sub", "-a",      "--path", "your_path",
-                            "--flag", "--",  "--build", "--",     "-j3" };
+    auto argv =
+      std::array{ "test",      "sub",    "-a", "-bc",     "2",  "--path",
+                  "your_path", "--flag", "--", "--build", "--", "-j3" };
 
     auto args = devkit::Args(argv.size(), argv.data());
 
     CHECK(args.program == "test");
     CHECK(args.subcommands[0] == "sub");
     CHECK(args.options.to_map()["a"] == "true");
+    CHECK(args.options.to_map()["b"] == "true");
+    CHECK(args.options.to_map()["c"] == "2");
     CHECK(args.options.to_map()["path"] == "your_path");
     CHECK(args.options.to_map()["flag"] == "true");
     CHECK(args.extra_arguments[0] == "--build");

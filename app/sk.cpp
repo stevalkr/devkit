@@ -212,7 +212,11 @@ main(int argc, char** argv)
   bool do_help = false;
   bool do_complete = false;
 
-  while (!args.subcommands.empty()) {
+  const auto args_env = std::getenv("SK_COMPLETE_ARGS_NUM");
+  const auto args_num = args_env != nullptr ? std::stoi(args_env) : argc;
+
+  auto count = 1u;
+  while (!args.subcommands.empty() && count < args_num) {
     auto cmd = args.subcommands.front();
     args.subcommands.pop_front();
     if (cmd == "help") {
@@ -225,6 +229,7 @@ main(int argc, char** argv)
       command = std::move(cmd);
       break;
     }
+    count += 1;
   }
 
   const auto help_msg = lua.call_module<std::string>("help", command);
@@ -235,14 +240,16 @@ main(int argc, char** argv)
   args.document(help_msg.value());
 
   if (do_complete) {
-    auto args_num =
-      std::stoi(std::string{ std::getenv("SK_COMPLETE_ARGS_NUM") });
-    if (args_num >= argc || args_num < 0) {
+    if (args_num > argc || args_num < 0) {
       dk_err("Invalid SK_COMPLETE_ARGS_NUM.");
       return 1;
     }
 
-    auto completes = args.complete({ argv[args_num] });
+    const auto prefix = args_num == argc ? "" : argv[args_num];
+    const auto completes = args.complete({ prefix });
+
+    fmt::println("{}", "type_not_implemented");
+
     for (const auto& [arg, desc] : completes) {
       fmt::println("{}\t{}", arg, desc);
     }
