@@ -32,6 +32,7 @@ rec {
               nativeBuildInputs = [ ninja cmake meson pkg-config installShellFiles ];
 
               postInstall = ''
+                installShellCompletion --zsh ${src}/completions/sk.zsh
                 installShellCompletion --fish ${src}/completions/sk.fish
               '';
 

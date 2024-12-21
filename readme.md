@@ -10,36 +10,84 @@ devkit is a set of tools for development.
 nix profile install github:stevalkr/devkit#sk
 ```
 
+Auto-completion is available for `zsh` and `fish`, add the following to your config file:
+
+```
+# zsh
+fpath=($HOME/.nix-profile/share/zsh/site-functions $fpath)
+autoload -U compinit; compinit
+
+# fish
+set fish_complete_path $fish_complete_path $HOME/.nix-profile/share/fish/vendor_completions.d
+```
+
 ### Prerequisites
 
 - fmt
 - lua
 - meson
-- doctest
+- doctest [optional]
 
 ### Usage
 
-ShortKut is a customizable alias, currently using Lua as scripting language.
-
-```bash
-sk build
-sk flake
-...
-```
-
-Write your own alias following the template:
+ShortKut is a customizable alias, currently using Lua as scripting language. Write your own alias following the template:
 
 ```lua
-local M = {}
+-- ${store}/apps/sk.lua
 
--- ~ sk alias
--- hello
-M.alias = function()
-    return 'echo hello'
+local M = {}
+local h = {}
+
+h['alias'] = [[
+Usage:
+    sk alias [options]
+
+Options:
+    -o, --option <opt>  Option description
+]]
+
+M.alias = function(cwd, subcommands, options, rest_args, extra_args)
+    if Confirmed then
+        return {
+            use_shell = 'false',
+            new_process = 'false',
+            search_path = 'true',
+            command = 'echo hello ' .. options['option']
+        }
+    else
+        return { command = 'echo Not Confirmed && exit 1' }
+    end
+end
+
+h['help'] = [[
+Usage:
+    sk <command> [subcommands] [options] [--] <extra arguments>
+
+Commands:
+    alias  Manage alias
+    help   Show help
+]]
+
+-- function to show help message
+M.help = function(command)
+    local general_options = [[
+
+General Options:
+  -h, --help                           Print help message
+  -y, --confirm                        Confirm all prompts
+  --store <dir>                        Store directory, default to ~/.devkit ]]
+
+    if #command == 0 then
+        command = 'help'
+    end
+
+    return (h[command] or '') .. general_options
 end
 
 return M
 ```
+
+For more details, please see [app/sk.cpp](https://github.com/stevalkr/devkit/blob/main/app/sk.cpp) and [dot_devkit](https://github.com/stevalkr/dot_devkit/blob/main/apps/sk.lua).
 
 ## devdocker
 
