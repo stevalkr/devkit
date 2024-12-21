@@ -4,6 +4,12 @@ devkit is a set of tools for development.
 
 ## ShortKut
 
+### Installation
+
+```bash
+nix profile install github:stevalkr/devkit#sk
+```
+
 ### Prerequisites
 
 - fmt
@@ -43,7 +49,7 @@ return M
 
 ### Usage
 
-`etherswangel/ros` and `etherswangel/dev` are available on `dockerhub`.
+`stevalkr/ros` and `stevalkr/dev` are available on `dockerhub`.
 
 `xproj` is a simple script to help use devdocker containers, modify the script to mount volumes.
 

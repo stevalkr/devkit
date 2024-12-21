@@ -182,6 +182,9 @@ main(int argc, char** argv)
   if (args.options["store"]->value.has_value()) {
     store = args.options["store"]->to_string();
   }
+  else {
+    args.options.set_long("store", store.string());
+  }
 
   if (!fs::is_directory(store)) {
     dk_err("Store path invalid.");

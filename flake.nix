@@ -25,7 +25,7 @@ rec {
               pname = "devkit";
               version = "develop";
 
-              src = ../.;
+              src = ./.;
               dontUseCmakeConfigure = true;
 
               buildInputs = [ lua fmt doctest yaml-cpp ];

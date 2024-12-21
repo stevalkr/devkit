@@ -71,14 +71,9 @@ public:
   void
   set_short(std::string&& key, std::string&& val)
   {
-    std::shared_ptr<Option> option = nullptr;
-    if (exist(key)) {
+    auto& option = (*this)[key];
+    if (option->value.has_value()) {
       dk_err("Args: Option {} is set twice! \"{}\" is used.", key, val);
-      option = options_map[key];
-    }
-    else {
-      option = std::make_shared<Option>();
-      options_map[key] = option;
     }
     option->short_name = std::move(key);
     option->value = std::move(val);
@@ -87,14 +82,9 @@ public:
   void
   set_long(std::string&& key, std::string&& val)
   {
-    std::shared_ptr<Option> option = nullptr;
-    if (exist(key)) {
+    auto& option = (*this)[key];
+    if (option->value.has_value()) {
       dk_err("Args: Option {} is set twice! \"{}\" is used.", key, val);
-      option = options_map[key];
-    }
-    else {
-      option = std::make_shared<Option>();
-      options_map[key] = option;
     }
     option->long_name = std::move(key);
     option->value = std::move(val);
