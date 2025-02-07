@@ -2,7 +2,7 @@ rec {
   description = "Devkit Environment";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-24.05-darwin";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-24.11-darwin";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -16,10 +16,10 @@ rec {
       {
         apps.sk = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/sk";
+          program = "${self.packages.${system}.sk}/bin/sk";
         };
 
-        packages.default = pkgs.callPackage
+        packages.sk = pkgs.callPackage
           ({ lib, stdenv, lua, fmt, doctest, yaml-cpp, ninja, cmake, meson, pkg-config, installShellFiles }:
             stdenv.mkDerivation rec{
               pname = "devkit";
