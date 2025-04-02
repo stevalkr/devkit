@@ -94,6 +94,14 @@ lua_exists(lua_State* L)
   }
 
   auto path = std::string{ lua_tostring(L, 1) };
+
+  if (!path.empty() && path[0] == '~') {
+    const char* home = std::getenv("HOME");
+    if (home != nullptr) {
+      path = dk::fmt("{}{}", home, path.substr(1));
+    }
+  }
+
   bool exists = std::filesystem::exists(path);
 
   lua_pushboolean(L, exists);

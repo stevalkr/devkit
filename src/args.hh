@@ -381,7 +381,7 @@ private:
 
         auto match = std::smatch{};
         auto regex = std::regex{
-          "(?:(?:-(\\w)[, ]+\\s*)?--(\\w+)(?:\\s+<(\\w+)>)?)\\s+(.*)"
+          "(?:(?:-(\\w)[, ]+\\s*)?--([\\w-]+)(?:\\s+<(\\w+)>)?)\\s+(.*)"
         };
         if (!std::regex_match(opt, match, regex)) {
           dk_err("Args: Error parsing options \"{}\"!", opt);
@@ -449,11 +449,14 @@ TEST_CASE("testing args")
     CHECK(args.options.to_map()["flag"] == "1");
   }
 
-  SUBCASE("sub -a -bc 2 --path your_path --flag -- --build -- -j3")
+  SUBCASE("sub -a -bc 2 --path your_path --new-path your-new-path --flag -- "
+          "--build -- -j3")
   {
-    auto argv =
-      std::array{ "test",      "sub",    "-a", "-bc",     "2",  "--path",
-                  "your_path", "--flag", "--", "--build", "--", "-j3" };
+    auto argv = std::array{ "test",      "sub",        "-a",
+                            "-bc",       "2",          "--path",
+                            "your_path", "--new-path", "your-new-path",
+                            "--flag",    "--",         "--build",
+                            "--",        "-j3" };
 
     auto args = devkit::Args(argv.size(), argv.data());
 
@@ -463,6 +466,7 @@ TEST_CASE("testing args")
     CHECK(args.options.to_map()["b"] == "true");
     CHECK(args.options.to_map()["c"] == "2");
     CHECK(args.options.to_map()["path"] == "your_path");
+    CHECK(args.options.to_map()["new-path"] == "your-new-path");
     CHECK(args.options.to_map()["flag"] == "true");
     CHECK(args.extra_arguments[0] == "--build");
     CHECK(args.extra_arguments[1] == "--");
